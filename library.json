@@ -1,0 +1,28 @@
+{
+  "name": "PCF8574",
+  "version": "1.0.0",
+  "description": "Bibliothèque C++ complète pour le composant d'extension d'E/S I2C PCF8574 et PCF8574A, avec gestion des erreurs, interruptions, et une syntaxe orientée objet.",
+  "keywords": [
+    "pcf8574",
+    "pcf8574a",
+    "i2c",
+    "io",
+    "expander",
+    "gpio"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Aminehammou/PCF_I2C_Expander.git"
+  },
+  "authors": [
+    {
+      "name": "Hammou Mohammed el Amine",
+      "email": "hammouamine@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "frameworks": "arduino",
+  "platforms": "*",
+  "examples": "examples/*.ino"
+}

@@ -1,0 +1,6 @@
+# Fichiers de build et de dépendances de PlatformIO
+.pio/
+.vscode/
+
+# Documentation générée par Doxygen (sera sur la branche gh-pages)
+/docs/
