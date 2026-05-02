@@ -41,6 +41,12 @@ void setup() {
   while (!Serial);
   Serial.println("Exemple Multi-PCF8574");
 
+  // Option: broches I2C personnalisées (ESP32/ESP8266)
+  // #if defined(ARDUINO_ARCH_ESP32) || defined(ESP8266)
+  //   pcf1.setPins(21, 22);
+  //   pcf2.setPins(21, 22);
+  // #endif
+
   // Initialiser les deux expandeurs.
   pcf1.begin();
   pcf2.begin();

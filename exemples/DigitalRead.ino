@@ -39,6 +39,11 @@ void setup() {
   while (!Serial);
   Serial.println("Exemple DigitalRead pour PCF8574");
 
+  // Option: broches I2C personnalisées (ESP32/ESP8266)
+  // #if defined(ARDUINO_ARCH_ESP32) || defined(ESP8266)
+  //   pcf.setPins(21, 22);
+  // #endif
+
   pcf.begin();
 
   // Configure la broche du bouton en entrée.

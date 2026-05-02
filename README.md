@@ -23,6 +23,7 @@ Grâce à l'utilisation de templates C++, la même base de code gère de manièr
 - **Interface familière :** Utilise des fonctions de style Arduino comme `pinMode()`, `digitalWrite()` et `digitalRead()`.
 - **Approche Orientée Objet :** Obtenez des objets `DigitalPin` pour manipuler chaque broche individuellement de manière claire et lisible.
 - **Performances optimisées :** Un cache interne de l'état des sorties minimise les transactions sur le bus I2C.
+- **Détection de Fronts :** Fonctions `risingEdge()` et `fallingEdge()` pour détecter les changements d'état sans effort.
 - **Gestion de port complète :** Lisez ou écrivez l'état de toutes les broches en une seule opération.
 - **Détection de composant :** Une fonction `isConnected()` permet de vérifier si le composant répond sur le bus I2C.
 
@@ -54,7 +55,11 @@ const int LED_PIN = 4; // Utiliser la broche P4 du PCF8574
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin(); // Initialise le bus I2C
+
+  // Option: broches I2C personnalisées (ESP32/ESP8266)
+  // pcf.setPins(21, 22); // SDA=21, SCL=22 sur ESP32
+
+  pcf.begin(); // Initialise la lib et écrit l'état initial
 
   // Vérifiez si le composant est bien connecté
   if (!pcf.isConnected()) {
@@ -96,7 +101,11 @@ const int LED_PIN = 1;     // Utiliser la broche P1
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin();
+
+  // Option: broches I2C personnalisées (ESP32/ESP8266)
+  // pcf.setPins(21, 22); // SDA=21, SCL=22
+
+  pcf.begin();
 
   if (!pcf.isConnected()) {
     Serial.println("Erreur: PCF8575 non trouvé !");
@@ -111,7 +120,13 @@ void setup() {
 
 void loop() {
   // Lit l'état du bouton. La logique est inversée à cause du pull-up.
-  uint8_t buttonState = pcf.read(BUTTON_PIN);
+  int buttonState = pcf.read(BUTTON_PIN);
+
+  // Vérifiez si la lecture a réussi
+  if (buttonState < 0) {
+    Serial.println("Erreur de lecture I2C !");
+    return;
+  }
 
   if (buttonState == LOW) { // Si le bouton est pressé
     pcf.write(LED_PIN, HIGH); // Allume la LED
@@ -157,15 +172,40 @@ void loop() {
 ### Classe Principale
 
 - `PCF8574_Expander(address)` / `PCF8575_Expander(address)`: Constructeur.
-- `void begin()`: Initialise la communication.
+- `void begin()`: Initialise la communication. Si des broches personnalisées ont été définies via `setPins(sda, scl)`, elles sont utilisées sur ESP32/ESP8266.
 - `bool isConnected()`: Vérifie la présence du composant.
-- `PCF_Status pinMode(pin, mode)`: Définit une broche en `INPUT` ou `OUTPUT`.
+- `PCF_Status pinMode(pin, mode)`: Définit une broche en `INPUT` ou `OUTPUT`. En `OUTPUT`, ne modifie pas le niveau courant (évite tout glitch); utilisez `write()` pour définir HIGH/LOW.
 - `PCF_Status write(pin, value)`: Écrit `HIGH` ou `LOW` sur une broche.
-- `uint8_t read(pin)`: Lit l'état d'une broche.
+- `int read(pin)`: Lit l'état d'une broche. Retourne `HIGH` (1), `LOW` (0), ou `-1` en cas d'erreur.
 - `PCF_Status toggle(pin)`: Inverse l'état d'une broche.
+- `bool risingEdge(pin)`: Détecte un front montant. Retourne `true` si un front montant est détecté, `false` sinon.
+- `bool fallingEdge(pin)`: Détecte un front descendant. Retourne `true` si un front descendant est détecté, `false` sinon.
 - `PCF_Status writePort(value)`: Écrit une valeur sur toutes les broches (8 ou 16 bits).
-- `PortType readPortValue()`: Lit la valeur de toutes les broches.
+- `PortType readPortValue()`: Lit la valeur de toutes les broches. En cas d’erreur bus, retourne 0.
+- `void setWire(TwoWire&)`: Sélectionne un autre bus I2C (ex: `Wire1`). À appeler avant `begin()`.
+- `void setPins(int sda, int scl)`: Définit des broches SDA/SCL personnalisées (ESP32/ESP8266). À appeler avant `begin()`.
 - `PCF_Expander_DigitalPin getPin(pin)`: Retourne un objet pour manipuler une broche.
+
+## 📝 Notes spécifiques PCF8574/PCF8575
+
+- **Mode OUTPUT (anti-glitch)**: `pinMode(pin, OUTPUT)` ne modifie plus le niveau de la broche; définissez explicitement l’état avec `write(pin, HIGH/LOW)`.
+- **Mode INPUT (pull-up)**: `pinMode(pin, INPUT)` écrit `1` sur le bit afin d’activer la résistance de rappel interne du PCF.
+- **Ordre des octets PCF8575**: lecture/écriture sur 16 bits envoie/reçoit d’abord le LSB (P00–P07), puis le MSB (P10–P17).
+- **Choix du bus I2C**: utilisez `setWire(TwoWire&)` (ex: `Wire1` sur ESP32) avant `begin()` si vous n’utilisez pas le bus par défaut.
+- **Vérification de bornes**: si `pin` est hors plage, `pinMode/write/toggle` retournent `PCF_ERROR`, et `read(pin)` retourne `-1`.
+- **Gestion d’erreur de lecture**: 
+  - `read(pin)` et `getPin(pin).digitalRead()` retournent `-1` en cas d'erreur de communication.
+  - `readPortValue()` retourne `0` en cas d’erreur bus; pour une gestion robuste, préférez `readPort(&value)` qui retourne un statut `PCF_Status`.
+
+### Exemple anti-glitch (recommandé)
+```cpp
+PCF8574_Expander io(0x20);
+Wire.begin();
+io.begin();
+// Configurer en sortie sans changer l’état, puis fixer le niveau voulu
+io.pinMode(3, OUTPUT);
+io.write(3, HIGH);
+```
 
 ## 🤝 Contribuer
 

@@ -29,6 +29,9 @@ void setup() {
   }
   Serial.println("Exemple de lecture de plusieurs boutons avec PCF_I2C_Expander");
 
+  // Option: broches I2C personnalisées (ESP32/ESP8266)
+  // pcf.setPins(21, 22);
+
   pcf.begin();
 
   if (!pcf.isConnected()) {

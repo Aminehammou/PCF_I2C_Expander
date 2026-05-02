@@ -103,6 +103,9 @@ void lcd_write_char(char value) {
 // --- Fonctions haut niveau ---
 
 void lcd_init() {
+  // Option: broches I2C personnalisées (ESP32/ESP8266)
+  // pcf.setPins(21, 22);
+
   pcf.begin();
   pcf.writePort(0x00); // Toutes les broches en sortie, rétroéclairage éteint
   delay(50);

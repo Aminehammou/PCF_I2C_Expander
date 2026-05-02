@@ -33,6 +33,11 @@ void setup() {
   while (!Serial);
   Serial.println("Exemple PortManipulation pour PCF8574");
 
+  // Option: broches I2C personnalisées (ESP32/ESP8266)
+  // #if defined(ARDUINO_ARCH_ESP32) || defined(ESP8266)
+  //   pcf.setPins(21, 22);
+  // #endif
+
   pcf.begin();
 
   Serial.println("Démarrage de la séquence...");

@@ -15,14 +15,22 @@
  * du port. La valeur par défaut est 0xFF, ce qui configure toutes les broches
  * comme des entrées avec leurs résistances de rappel (pull-up) internes activées.
  */
-PCF8574::PCF8574(uint8_t address, uint8_t initialState) : _address(address), _portState(initialState) {}
+PCF8574::PCF8574(uint8_t address, uint8_t initialState) : _address(address), _portState(initialState), _previousState(initialState) {}
 
 /**
  * @brief Initialise le bus I2C et définit l'état initial de l'expandeur.
  * Doit être appelée dans la fonction `setup()` de votre sketch.
  */
 void PCF8574::begin() {
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP8266)
+  if (_use_custom_pins) {
+    Wire.begin(_sda_pin, _scl_pin);
+  } else {
+    Wire.begin();
+  }
+#else
   Wire.begin();
+#endif
   // Écrit l'état par défaut sur le composant pour s'assurer que toutes les broches sont à l'état haut (entrées)
   writePort(_portState);
 }
@@ -33,6 +41,12 @@ void PCF8574::begin() {
  */
 void PCF8574::setClock(uint32_t clockSpeed) {
   Wire.setClock(clockSpeed);
+}
+
+void PCF8574::setPins(int sda_pin, int scl_pin) {
+  _sda_pin = sda_pin;
+  _scl_pin = scl_pin;
+  _use_custom_pins = true;
 }
 
 /**
@@ -59,11 +73,12 @@ PCF8574_Status PCF8574::pinMode(uint8_t pin, uint8_t mode) {
 
   if (mode == INPUT) {
     _portState |= (1 << pin);
+    return writePort(_portState);
   } else {
-    // Pour le mode OUTPUT, aucun changement n'est nécessaire ici dans le cache d'état.
-    // Le niveau de la broche sera défini par le prochain appel à write().
+    // OUTPUT: ne pas écrire sur le bus ici pour éviter tout glitch; l'utilisateur définira
+    // explicitement le niveau via write(pin, HIGH/LOW).
+    return PCF8574_OK;
   }
-  return writePort(_portState);
 }
 
 /**
@@ -197,6 +212,54 @@ bool PCF8574::isConnected() {
 }
 
 /**
+ * @brief Fonction d'aide privée pour détecter un type de front spécifique sur une broche.
+ * @param pin La broche à surveiller (0-7).
+ * @param edge Le type de front à détecter (RISING ou FALLING).
+ * @return true si le front spécifié est détecté, false sinon.
+ * @note Cette fonction effectue une lecture I2C et met à jour l'état précédent.
+ */
+bool PCF8574::checkEdge(uint8_t pin, EdgeType edge) {
+  if (pin > 7) return false;
+  
+  uint8_t currentState;
+  if (readPort(&currentState) != PCF8574_OK) {
+    return false; // Échec de la lecture I2C
+  }
+  
+  // Extrait l'état actuel et précédent du bit de la broche
+  bool previousBit = (_previousState >> pin) & 1;
+  bool currentBit = (currentState >> pin) & 1;
+  
+  // Met à jour l'état précédent pour la prochaine détection
+  _previousState = currentState;
+  
+  // Vérifie le type de front demandé
+  if (edge == PCF_RISING) {
+    return (!previousBit && currentBit);
+  } else { // FALLING
+    return (previousBit && !currentBit);
+  }
+}
+
+/**
+ * @brief Détecte un front montant sur une broche spécifique.
+ * @param pin La broche à surveiller (0-7).
+ * @return true si un front montant est détecté, false sinon.
+ */
+bool PCF8574::risingEdge(uint8_t pin) {
+  return checkEdge(pin, PCF_RISING);
+}
+
+/**
+ * @brief Détecte un front descendant sur une broche spécifique.
+ * @param pin La broche à surveiller (0-7).
+ * @return true si un front descendant est détecté, false sinon.
+ */
+bool PCF8574::fallingEdge(uint8_t pin) {
+  return checkEdge(pin, PCF_FALLING);
+}
+
+/**
  * @brief Lit l'état de plusieurs broches en utilisant un masque.
  * @param mask Le masque des broches à lire.
  * @param value Pointeur pour stocker le résultat.
@@ -248,12 +311,16 @@ void PCF8574_DigitalPin::digitalWrite(uint8_t value) {
 
 /**
  * @brief Lit la valeur de la broche.
- * @return HIGH ou LOW.
+ * @return La valeur lue (HIGH ou LOW), ou -1 en cas d'erreur de communication I2C.
  */
-uint8_t PCF8574_DigitalPin::digitalRead() {
+int PCF8574_DigitalPin::digitalRead() {
   uint8_t value = LOW;
-  _parent.read(_pin, &value);
-  return value;
+  PCF8574_Status status = _parent.read(_pin, &value);
+  if (status == PCF8574_OK) {
+    return value;
+  } else {
+    return -1; // Indique une erreur de lecture
+  }
 }
 
 /**

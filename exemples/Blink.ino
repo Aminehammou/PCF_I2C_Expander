@@ -40,6 +40,12 @@ void setup() {
   while (!Serial); // Attendre que le port série soit prêt (pour les cartes comme Leonardo/Micro)
   Serial.println("Exemple Blink pour PCF8574");
 
+  // Option: broches I2C personnalisées (ESP32/ESP8266)
+  // Décommentez et adaptez si vous utilisez des broches SDA/SCL non par défaut
+  // #if defined(ARDUINO_ARCH_ESP32) || defined(ESP8266)
+  //   pcf.setPins(21, 22); // SDA=21, SCL=22 sur ESP32 par défaut
+  // #endif
+
   // Initialise la communication avec le PCF8574.
   pcf.begin();
 

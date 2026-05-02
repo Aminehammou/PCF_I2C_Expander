@@ -29,7 +29,7 @@ public:
   PCF8574_DigitalPin(PCF8574& parent, uint8_t pin);
   void pinMode(uint8_t mode);
   void digitalWrite(uint8_t value);
-  uint8_t digitalRead();
+  int digitalRead();
   void toggle();
 
 private:
@@ -67,6 +67,12 @@ public:
    * Assurez-vous que tous les appareils sur le bus supportent la vitesse sélectionnée.
    */
   void setClock(uint32_t clockSpeed);
+
+  /**
+   * @brief Définit des broches I2C personnalisées (ex: SDA=21, SCL=22 sur ESP32).
+   * A appeler avant begin(). Ignoré sur plateformes sans begin(sda,scl).
+   */
+  void setPins(int sda_pin, int scl_pin);
 
   /**
    * @brief Réinitialise le PCF8574 à son état par défaut (toutes les broches en entrée).
@@ -163,6 +169,20 @@ public:
   bool isConnected();
 
   /**
+   * @brief Détecte un front montant sur une broche spécifique.
+   * @param pin Le numéro de la broche à surveiller (0-7).
+   * @return true si un front montant est détecté, false sinon.
+   */
+  bool risingEdge(uint8_t pin);
+
+  /**
+   * @brief Détecte un front descendant sur une broche spécifique.
+   * @param pin Le numéro de la broche à surveiller (0-7).
+   * @return true si un front descendant est détecté, false sinon.
+   */
+  bool fallingEdge(uint8_t pin);
+
+  /**
    * @brief Obtient un objet représentant une seule broche numérique.
    * @param pin Le numéro de la broche à obtenir (0-7).
    * @return Un objet PCF8574_DigitalPin.
@@ -170,11 +190,23 @@ public:
   PCF8574_DigitalPin getPin(uint8_t pin);
 
 private:
+  /// @brief Type de front à détecter.
+  enum EdgeType { PCF_RISING, PCF_FALLING };
+
+  /// @brief Fonction d'aide pour la détection de fronts.
+  bool checkEdge(uint8_t pin, EdgeType edge);
+
   /// @brief L'adresse I2C du composant.
   uint8_t _address;
 
   /// @brief Un cache local de l'état de sortie du port pour minimiser le trafic I2C.
   uint8_t _portState;
+  /// @brief État précédent du port pour la détection de fronts.
+  uint8_t _previousState;
+  // Broches I2C personnalisées (utilisées si setPins() est appelé sur ESP32/ESP8266)
+  int _sda_pin = -1;
+  int _scl_pin = -1;
+  bool _use_custom_pins = false;
 };
 
 #endif

@@ -36,7 +36,7 @@ public:
 
     void pinMode(uint8_t mode) { _parent.pinMode(_pin, mode); }
     void digitalWrite(uint8_t value) { _parent.write(_pin, value); }
-    uint8_t digitalRead() { return _parent.read(_pin); }
+    int digitalRead() { return _parent.read(_pin); }
     void toggle() { _parent.toggle(_pin); }
 
 private:
@@ -60,13 +60,36 @@ public:
     PCF_I2C_Expander(uint8_t address, PortType initialState = (PortType)-1)
         : _address(address), _portState(initialState), _wire(&Wire) {}
 
+    // Doit être appelée dans setup(). Si des broches personnalisées ont été définies via setPins(),
+    // elles seront utilisées sur ESP32/ESP8266; ailleurs, on ignore et utilise begin() par défaut.
     void begin() {
+    #if defined(ARDUINO_ARCH_ESP32) || defined(ESP8266)
+        if (_use_custom_pins) {
+            _wire->begin(_sda_pin, _scl_pin); // utilise SDA/SCL personnalisées
+        } else {
+            _wire->begin();
+        }
+    #else
         _wire->begin();
+    #endif
         writePort(_portState);
     }
 
     void setClock(uint32_t clockSpeed) {
         _wire->setClock(clockSpeed);
+    }
+
+    // Permet d'utiliser un autre bus I2C (ex: Wire1 sur ESP32). A appeler avant begin().
+    void setWire(TwoWire& wire) {
+        _wire = &wire;
+    }
+
+    // Définit des broches I2C personnalisées (ex: SDA=21, SCL=22 sur ESP32).
+    // A appeler avant begin(). Sans effet sur plateformes où begin(sda,scl) n'existe pas.
+    void setPins(int sda_pin, int scl_pin) {
+        _sda_pin = sda_pin;
+        _scl_pin = scl_pin;
+        _use_custom_pins = true;
     }
 
     bool isConnected() {
@@ -75,15 +98,21 @@ public:
     }
 
     PCF_Status pinMode(uint8_t pin, uint8_t mode) {
+        const uint8_t pinCount = sizeof(PortType) * 8;
+        if (pin >= pinCount) return PCF_ERROR;
         if (mode == INPUT) {
+            // INPUT: écrire 1 pour activer le pull-up interne
             _portState |= ((PortType)1 << pin);
+            return writePort(_portState);
         } else {
-            _portState &= ~((PortType)1 << pin);
+            // OUTPUT: ne change pas le niveau ici pour éviter un glitch; l'utilisateur appellera write()
+            return PCF_OK;
         }
-        return writePort(_portState);
     }
 
     PCF_Status write(uint8_t pin, uint8_t value) {
+        const uint8_t pinCount = sizeof(PortType) * 8;
+        if (pin >= pinCount) return PCF_ERROR;
         if (value == HIGH) {
             _portState |= ((PortType)1 << pin);
         } else {
@@ -92,15 +121,21 @@ public:
         return writePort(_portState);
     }
 
-    uint8_t read(uint8_t pin) {
-        PortType portValue = readPortValue();
-        if ((portValue & ((PortType)1 << pin))) {
-            return HIGH;
+    int read(uint8_t pin) {
+        const uint8_t pinCount = sizeof(PortType) * 8;
+        if (pin >= pinCount) return -1; // Erreur: broche invalide
+
+        PortType portValue;
+        if (readPort(&portValue) != PCF_OK) {
+            return -1; // Erreur: lecture I2C a échoué
         }
-        return LOW;
+
+        return (portValue >> pin) & 1;
     }
 
     PCF_Status toggle(uint8_t pin) {
+        const uint8_t pinCount = sizeof(PortType) * 8;
+        if (pin >= pinCount) return PCF_ERROR;
         _portState ^= ((PortType)1 << pin);
         return writePort(_portState);
     }
@@ -150,10 +185,45 @@ public:
         return PCF_Expander_DigitalPin<PortType>(*this, pin);
     }
 
+    bool risingEdge(uint8_t pin) {
+        return checkEdge(pin, PCF_RISING);
+    }
+
+    bool fallingEdge(uint8_t pin) {
+        return checkEdge(pin, PCF_FALLING);
+    }
+
 private:
+    enum EdgeType { PCF_RISING, PCF_FALLING };
+
+    bool checkEdge(uint8_t pin, EdgeType edge) {
+        const uint8_t pinCount = sizeof(PortType) * 8;
+        if (pin >= pinCount) return false;
+
+        PortType currentState;
+        if (readPort(&currentState) != PCF_OK) {
+            return false;
+        }
+
+        bool previousBit = (_previousState >> pin) & 1;
+        bool currentBit = (currentState >> pin) & 1;
+        _previousState = currentState;
+
+        if (edge == PCF_RISING) {
+            return !previousBit && currentBit;
+        } else {
+            return previousBit && !currentBit;
+        }
+    }
+
     uint8_t _address;
     PortType _portState;
+    PortType _previousState; // Pour la détection de front
     TwoWire* _wire;
+    // Gestion des broches personnalisées (utilisées uniquement si setPins() est appelé)
+    int _sda_pin = -1;
+    int _scl_pin = -1;
+    bool _use_custom_pins = false;
 };
 
 /**
