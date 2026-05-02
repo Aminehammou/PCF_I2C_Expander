@@ -2,5 +2,7 @@
 .pio/
 .vscode/
 
+PUBLICATION.md
+
 # Documentation générée par Doxygen (sera sur la branche gh-pages)
 /docs/
